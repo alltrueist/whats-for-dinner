@@ -1,0 +1,223 @@
+/* css/palettes.css
+   ─────────────────────────────────────────────────────────────────────────────
+   Palette system: CSS custom properties applied per palette class on <body>.
+   Default is Slate — applied at page load, swapped on login.
+   All color usage in app.css references these variables only.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+
+/* ─── Palette 1: Slate (Default — light neutral) ─── */
+.palette-slate {
+  --bg:              #F8F9FA;
+  --surface:         #FFFFFF;
+  --surface-2:       #F1F3F5;
+  --surface-3:       #E9ECEF;
+  --primary:         #495057;
+  --primary-dark:    #343A40;
+  --primary-light:   #6C757D;
+  --accent:          #ADB5BD;
+  --text:            #212529;
+  --text-2:          #495057;
+  --text-3:          #868E96;
+  --text-on-primary: #FFFFFF;
+  --border:          #DEE2E6;
+  --border-strong:   #CED4DA;
+  --alert:           #C92A2A;
+  --alert-bg:        #FFE3E3;
+  --alert-border:    #FF8787;
+  --cooldown:        #868E96;
+  --cooldown-bg:     #F1F3F5;
+  --success:         #2B6940;
+  --success-bg:      #D3F9D8;
+  --success-border:  #8CE99A;
+  --warning:         #E67700;
+  --warning-bg:      #FFF9EC;
+  --warning-border:  #FFD43B;
+  --shadow-sm:       0 1px 4px rgba(0,0,0,0.07);
+  --shadow-md:       0 2px 12px rgba(0,0,0,0.10);
+  --shadow-lg:       0 8px 32px rgba(0,0,0,0.16);
+  --radius-sm:       8px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       24px;
+}
+
+/* ─── Palette 2: Obsidian (Dark mode) ─── */
+.palette-obsidian {
+  --bg:              #212529;
+  --surface:         #2C3034;
+  --surface-2:       #343A40;
+  --surface-3:       #3D4349;
+  --primary:         #6C757D;
+  --primary-dark:    #495057;
+  --primary-light:   #ADB5BD;
+  --accent:          #ADB5BD;
+  --text:            #F8F9FA;
+  --text-2:          #CED4DA;
+  --text-3:          #ADB5BD;
+  --text-on-primary: #FFFFFF;
+  --border:          #495057;
+  --border-strong:   #6C757D;
+  --alert:           #FF6B6B;
+  --alert-bg:        #3D1515;
+  --alert-border:    #FF4444;
+  --cooldown:        #495057;
+  --cooldown-bg:     #2C3034;
+  --success:         #69DB7C;
+  --success-bg:      #0D2B15;
+  --success-border:  #40C057;
+  --warning:         #FFD43B;
+  --warning-bg:      #2D2200;
+  --warning-border:  #F59F00;
+  --shadow-sm:       0 1px 4px rgba(0,0,0,0.30);
+  --shadow-md:       0 2px 12px rgba(0,0,0,0.40);
+  --shadow-lg:       0 8px 32px rgba(0,0,0,0.55);
+  --radius-sm:       8px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       24px;
+}
+
+/* ─── Palette 3: Azure (Classic blue) ─── */
+.palette-azure {
+  --bg:              #F0F4F8;
+  --surface:         #FFFFFF;
+  --surface-2:       #E8EEF4;
+  --surface-3:       #D8E5EF;
+  --primary:         #1864AB;
+  --primary-dark:    #0F4E8A;
+  --primary-light:   #339AF0;
+  --accent:          #4DABF7;
+  --text:            #1A1A2E;
+  --text-2:          #2C4A6E;
+  --text-3:          #5C7A99;
+  --text-on-primary: #FFFFFF;
+  --border:          #BFCFDE;
+  --border-strong:   #A0BAD0;
+  --alert:           #C92A2A;
+  --alert-bg:        #FFE3E3;
+  --alert-border:    #FF8787;
+  --cooldown:        #868E96;
+  --cooldown-bg:     #E8EEF4;
+  --success:         #2B6940;
+  --success-bg:      #D3F9D8;
+  --success-border:  #8CE99A;
+  --warning:         #E67700;
+  --warning-bg:      #FFF9EC;
+  --warning-border:  #FFD43B;
+  --shadow-sm:       0 1px 4px rgba(24,100,171,0.08);
+  --shadow-md:       0 2px 12px rgba(24,100,171,0.12);
+  --shadow-lg:       0 8px 32px rgba(24,100,171,0.18);
+  --radius-sm:       8px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       24px;
+}
+
+/* ─── Palette 4: Sage (Green) ─── */
+.palette-sage {
+  --bg:              #F4F7F4;
+  --surface:         #FFFFFF;
+  --surface-2:       #EAF0EA;
+  --surface-3:       #D9EAD9;
+  --primary:         #2B6940;
+  --primary-dark:    #1F4D2F;
+  --primary-light:   #40A060;
+  --accent:          #69DB7C;
+  --text:            #1B2D25;
+  --text-2:          #2F5040;
+  --text-3:          #4A7A5A;
+  --text-on-primary: #FFFFFF;
+  --border:          #C3D9CB;
+  --border-strong:   #A8C9B5;
+  --alert:           #C92A2A;
+  --alert-bg:        #FFE3E3;
+  --alert-border:    #FF8787;
+  --cooldown:        #868E96;
+  --cooldown-bg:     #EAF0EA;
+  --success:         #0B7285;
+  --success-bg:      #C3FAE8;
+  --success-border:  #38D9A9;
+  --warning:         #E67700;
+  --warning-bg:      #FFF9EC;
+  --warning-border:  #FFD43B;
+  --shadow-sm:       0 1px 4px rgba(43,105,64,0.08);
+  --shadow-md:       0 2px 12px rgba(43,105,64,0.12);
+  --shadow-lg:       0 8px 32px rgba(43,105,64,0.18);
+  --radius-sm:       8px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       24px;
+}
+
+/* ─── Palette 5: Terracotta (Warm/earthy) ─── */
+.palette-terracotta {
+  --bg:              #FFF5F0;
+  --surface:         #FFFFFF;
+  --surface-2:       #FDEEE8;
+  --surface-3:       #F9DDD3;
+  --primary:         #C1440E;
+  --primary-dark:    #A33A0C;
+  --primary-light:   #E05A24;
+  --accent:          #FF8C69;
+  --text:            #2C1A14;
+  --text-2:          #5C3020;
+  --text-3:          #8B5A47;
+  --text-on-primary: #FFFFFF;
+  --border:          #F0C4B4;
+  --border-strong:   #E8A898;
+  --alert:           #9B2226;
+  --alert-bg:        #FFE3E3;
+  --alert-border:    #E05252;
+  --cooldown:        #868E96;
+  --cooldown-bg:     #FDEEE8;
+  --success:         #2B6940;
+  --success-bg:      #D3F9D8;
+  --success-border:  #8CE99A;
+  --warning:         #C05E00;
+  --warning-bg:      #FFF9EC;
+  --warning-border:  #FFD43B;
+  --shadow-sm:       0 1px 4px rgba(193,68,14,0.08);
+  --shadow-md:       0 2px 12px rgba(193,68,14,0.12);
+  --shadow-lg:       0 8px 32px rgba(193,68,14,0.18);
+  --radius-sm:       8px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       24px;
+}
+
+/* ─── Palette 6: Violet (Bold) ─── */
+.palette-violet {
+  --bg:              #F8F0FF;
+  --surface:         #FFFFFF;
+  --surface-2:       #F0E4FF;
+  --surface-3:       #E5D0FF;
+  --primary:         #6A0DAD;
+  --primary-dark:    #570B8C;
+  --primary-light:   #9B3DDB;
+  --accent:          #C77DFF;
+  --text:            #1A0A2E;
+  --text-2:          #3D1875;
+  --text-3:          #6A4A8C;
+  --text-on-primary: #FFFFFF;
+  --border:          #D9B8F5;
+  --border-strong:   #C49AED;
+  --alert:           #C92A2A;
+  --alert-bg:        #FFE3E3;
+  --alert-border:    #FF8787;
+  --cooldown:        #868E96;
+  --cooldown-bg:     #F0E4FF;
+  --success:         #2B6940;
+  --success-bg:      #D3F9D8;
+  --success-border:  #8CE99A;
+  --warning:         #E67700;
+  --warning-bg:      #FFF9EC;
+  --warning-border:  #FFD43B;
+  --shadow-sm:       0 1px 4px rgba(106,13,173,0.08);
+  --shadow-md:       0 2px 12px rgba(106,13,173,0.14);
+  --shadow-lg:       0 8px 32px rgba(106,13,173,0.20);
+  --radius-sm:       8px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       24px;
+}
