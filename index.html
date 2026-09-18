@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
-  <!-- PWA / mobile meta -->
   <meta name="theme-color" content="#495057" id="theme-color-meta">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,34 +15,30 @@
   <title>What's for Dinner?</title>
 
   <link rel="manifest" href="manifest.json">
-
-  <!-- Apple touch icons (add your own icons in /icons/) -->
   <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-  <!-- Styles -->
   <link rel="stylesheet" href="css/palettes.css">
   <link rel="stylesheet" href="css/app.css">
 </head>
 
 <body class="palette-slate">
 
-  <!-- Main app container — all screens render here -->
-  <div id="app">
-
-    <!-- Loading screen — shown on boot, hidden after auth resolves -->
-    <div id="loading-screen">
-      <div class="loading-wordmark">What's for Dinner?</div>
-      <div class="spinner"></div>
-    </div>
-
+  <!--
+    IMPORTANT: #loading-screen lives OUTSIDE #app so the router
+    clearing app.innerHTML never accidentally destroys it.
+  -->
+  <div id="loading-screen">
+    <div class="loading-wordmark">What's for Dinner?</div>
+    <div class="spinner"></div>
   </div>
 
-  <!-- App entry point (ES module) -->
+  <!-- All screens render here -->
+  <div id="app"></div>
+
   <script type="module" src="js/app.js"></script>
 
-  <!-- Service Worker registration -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
