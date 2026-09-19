@@ -1,275 +1,192 @@
 // js/screens/shopping.js — Shopping List (adults only)
 import { currentUser } from '../state.js';
 import { navigate } from '../router.js';
-import { getHouseholdSettings, markPurchased } from '../db.js';
-import {
-  getDocs, doc, updateDoc, collection, query,
-  where, orderBy, limit, onSnapshot, serverTimestamp, addDoc
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { markPurchased } from '../db.js';
+import { getCurrentCycle } from '../cycles.js';
+import { doc, updateDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { db } from '../firebase.js';
 import { COLLECTIONS } from '../config.js';
 
-const AVATAR_COLORS = { Owen:'#495057', Hanna:'#2B6940' };
-function avatarBg(n){ return AVATAR_COLORS[n]||'#868E96'; }
-function initials(n){ return n?n.slice(0,2).toUpperCase():'??'; }
+const AC={Owen:'#495057',Hanna:'#2B6940'};
+const ab=n=>AC[n]||'#868E96';
+const ini=n=>n?n.slice(0,2).toUpperCase():'??';
+let _listId=null, _unsub=null;
 
-let _listId = null;
-let _unsubscribe = null;
-
-export async function renderShopping(params, container) {
-  container.innerHTML = `
-    <div class="screen" id="shopping-screen">
+export async function renderShopping(params,container) {
+  container.innerHTML=`
+    <div class="screen" id="shop-screen">
       <div class="app-header">
         <div class="app-wordmark">What's for Dinner?</div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="icon-btn" id="silence-btn" title="Silence notifications">🔔</button>
-          <div class="avatar" style="background:${avatarBg(currentUser?.displayName)};color:#fff;">${initials(currentUser?.displayName)}</div>
+          <button class="icon-btn" id="silence-btn">🔔</button>
+          <div class="avatar" style="background:${ab(currentUser?.displayName)};color:#fff;">${ini(currentUser?.displayName)}</div>
         </div>
       </div>
-      <div id="shopping-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div id="shop-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
         <div style="display:flex;justify-content:center;align-items:center;flex:1;"><div class="spinner"></div></div>
       </div>
       ${buildTabBar()}
     </div>`;
-
   bindTabBar();
-  document.getElementById('silence-btn')?.addEventListener('click', showSilenceMenu);
-  await loadShoppingList(container);
+  document.getElementById('silence-btn')?.addEventListener('click',showSilence);
+  await loadList();
+  return ()=>{if(_unsub)_unsub();};
 }
 
-async function loadShoppingList(container) {
-  const body = document.getElementById('shopping-body');
+async function loadList() {
+  const body=document.getElementById('shop-body');
   try {
-    // Find active shopping list from active cycle
-    const cycleQ = query(collection(db,COLLECTIONS.CYCLES), where('status','in',['active','planning']), orderBy('startDate','desc'), limit(1));
-    const cycles  = (await getDocs(cycleQ)).docs;
-    if (cycles.length===0 || !cycles[0].data().shoppingListId) {
-      body.innerHTML = buildNoListState();
-      document.getElementById('go-planner-btn')?.addEventListener('click',()=>navigate('/planner'));
-      return;
-    }
-
-    _listId = cycles[0].data().shoppingListId;
-
-    // Subscribe to real-time updates
-    if (_unsubscribe) _unsubscribe();
-    _unsubscribe = onSnapshot(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId), snap=>{
-      if (!snap.exists()) return;
-      const list = {id:snap.id,...snap.data()};
-      renderList(list, body);
+    const cycle=await getCurrentCycle();
+    if(!cycle?.shoppingListId) { body.innerHTML=buildNoList(); document.getElementById('go-plan-btn')?.addEventListener('click',()=>navigate('/planner')); return; }
+    _listId=cycle.shoppingListId;
+    if(_unsub) _unsub();
+    _unsub=onSnapshot(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),snap=>{
+      if(!snap.exists())return;
+      renderList({id:snap.id,...snap.data()},body);
     });
-
-  } catch(err) {
-    console.error(err);
-    body.innerHTML = `<div class="note note-warn" style="margin:20px;"><span>⚠</span><div>Failed to load shopping list.</div></div>`;
+  } catch(e) {
+    console.error('[Shopping]',e);
+    body.innerHTML=`<div class="note note-warn" style="margin:20px;"><span>⚠</span><div>Failed to load: ${e.message}</div></div>`;
   }
-
-  // Return cleanup
-  return () => { if(_unsubscribe) _unsubscribe(); };
 }
 
-function buildNoListState() {
+function buildNoList(){
   return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:40px;text-align:center;">
     <div style="font-size:48px;margin-bottom:16px;">🛒</div>
     <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px;">No shopping list yet</div>
-    <div style="font-size:14px;color:var(--text-3);margin-bottom:24px;line-height:1.6;">
-      Finalize a cycle in the Planner to auto-generate your shopping list.
-    </div>
-    <button class="btn-primary" id="go-planner-btn">Go to Planner →</button>
+    <div style="font-size:14px;color:var(--text-3);margin-bottom:24px;line-height:1.6;">Finalize a cycle in the Planner to generate your list.</div>
+    <button class="btn-primary" id="go-plan-btn">Go to Planner →</button>
   </div>`;
 }
 
-function renderList(list, body) {
-  const items    = list.items || [];
-  const aldis    = items.filter(i=>i.assignedStore==='aldi');
-  const krogers  = items.filter(i=>i.assignedStore!=='aldi');
-  const staples  = items.filter(i=>i.isStaple||i.fromStaples);
-  const checked  = items.filter(i=>i.checkedOff).length;
-  const total    = items.length;
-
-  body.innerHTML = `
-    <!-- Gen info -->
-    <div class="gen-bar">
-      Generated from ${total} ingredient${total!==1?'s':''} · ${checked} of ${total} checked
-    </div>
-
-    <!-- Sync bar -->
+function renderList(list,body) {
+  const items=list.items||[];
+  const aldi=items.filter(i=>i.assignedStore==='aldi');
+  const kroger=items.filter(i=>i.assignedStore!=='aldi');
+  const checked=items.filter(i=>i.checkedOff).length;
+  body.innerHTML=`
+    <div class="gen-bar"><strong>${checked}</strong> of <strong>${items.length}</strong> items checked</div>
     <div class="sync-bar" id="sync-bar">
       <div class="sync-dot"></div>
-      <span class="sync-text" id="sync-text">Synced — changes update instantly for both shoppers</span>
-      <button class="notif-btn" id="bell-btn">🔔</button>
+      <span class="sync-text" id="sync-text">Live sync active</span>
+      <button class="notif-btn" id="bell2">🔔</button>
     </div>
-
-    <!-- List -->
     <div class="screen-scroll" id="list-scroll">
-      <div id="list-content">
-        ${buildStoreSection('🛒 Aldi', aldis, 'aldi')}
-        ${buildStoreSection('🛒 Kroger', krogers, 'kroger')}
-        ${buildStaplesSection(staples)}
+      <div id="list-body">
+        ${storeSection('A','aldi','Aldi',aldi)}
+        ${storeSection('K','kroger','Kroger',kroger)}
+        ${staplesSection(items.filter(i=>i.isManuallyAdded===false&&i.pantryStatus==='stocked'))}
       </div>
-
-      <!-- Add item -->
       <div class="add-item-row">
-        <input class="form-input add-item-input" id="add-item-input" type="text" placeholder="Add an item…" />
-        <button class="add-item-btn" id="add-item-submit">+</button>
+        <input class="form-input add-item-input" id="add-input" type="text" placeholder="Add an item…" />
+        <button class="add-item-btn" id="add-submit">+</button>
       </div>
     </div>
-
-    <!-- Complete button -->
     <div style="padding:10px 16px max(16px,env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--border);">
-      <button class="btn-primary btn-full ${list.status==='complete'?'':'active'}" id="complete-btn"
-        style="background:var(--success);">
-        ${list.status==='complete' ? '✓ Shopping Complete' : '✓ Mark List Done'}
+      <button class="btn-primary btn-full" id="done-btn" style="background:var(--success);">
+        ${list.status==='complete'?'✓ Shopping Complete':'✓ Mark List Done'}
       </button>
-    </div>
-  `;
-
-  bindListEvents(list, items);
+    </div>`;
+  document.getElementById('bell2')?.addEventListener('click',showSilence);
+  bindListEvents(list,items);
 }
 
-function buildStoreSection(label, items, store) {
-  if (items.length===0) return '';
-  const byCategory = {};
-  items.forEach(item=>{
-    const cat = item.category||'Other';
-    if (!byCategory[cat]) byCategory[cat]=[];
-    byCategory[cat].push(item);
-  });
-
+function storeSection(letter,store,label,items){
+  if(!items.length) return '';
+  const bycat={};
+  items.forEach(i=>{const c=i.category||'Other';(bycat[c]=bycat[c]||[]).push(i);});
   return `
     <div class="store-section">
       <div class="store-header">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div class="store-logo ${store}-logo">${store==='aldi'?'A':'K'}</div>
+          <div class="store-logo ${store}-logo">${letter}</div>
           <span class="store-label">${label}</span>
           <span class="store-count">${items.length} items</span>
         </div>
-        ${buildStoreSubtotal(items)}
       </div>
-      ${Object.entries(byCategory).map(([cat,catItems])=>`
+      ${Object.entries(bycat).map(([cat,ci])=>`
         <div class="cat-divider"><span class="cat-label">${cat}</span><div class="cat-line"></div></div>
-        ${catItems.map(item=>buildItemRow(item)).join('')}
-      `).join('')}
+        ${ci.map(item=>itemRow(item,store)).join('')}`).join('')}
     </div>`;
 }
 
-function buildStoreSubtotal(items) {
-  const total = items.reduce((sum,i)=>{
-    const p=i.assignedStore==='aldi'?i.aldiPrice:i.krogerSalePrice||i.krogerPrice;
-    return sum+(p||0);
-  },0);
-  if (total===0) return '';
-  return `<span class="store-subtotal">~$${total.toFixed(2)}</span>`;
+function staplesSection(suppressed){
+  if(!suppressed.length) return '';
+  return `<div style="padding:8px 14px;background:var(--surface-2);border-top:1px solid var(--border);">
+    <div style="font-size:11px;color:var(--text-3);">✓ ${suppressed.length} pantry item${suppressed.length!==1?'s':''} suppressed (in stock)</div>
+  </div>`;
 }
 
-function buildStaplesSection(staples) {
-  if(staples.length===0) return '';
+function itemRow(item,store){
+  const low=item.pantryStatus==='low';
+  const hasSale=item.krogerSalePrice&&item.krogerPrice&&item.krogerSalePrice<item.krogerPrice;
+  const price=store==='aldi'?item.aldiPrice:(item.krogerSalePrice||item.krogerPrice);
+  const orig=store!=='aldi'&&hasSale?item.krogerPrice:null;
+  const other=store==='aldi'?'Kroger':'Aldi';
+  const name=item.ingredientName||item.name||'Item';
   return `
-    <div class="store-section">
-      <div class="store-header">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span>⭐</span>
-          <span class="store-label">Always Buy</span>
-        </div>
-      </div>
-      ${staples.map(item=>buildItemRow(item)).join('')}
-    </div>`;
-}
-
-function buildItemRow(item) {
-  const isLow    = item.pantryStatus==='low';
-  const hasSale  = item.krogerSalePrice && item.krogerPrice && item.krogerSalePrice<item.krogerPrice;
-  const price    = item.assignedStore==='aldi' ? item.aldiPrice : item.krogerSalePrice||item.krogerPrice;
-  const origPrice= item.assignedStore!=='aldi' && hasSale ? item.krogerPrice : null;
-  const otherStore = item.assignedStore==='aldi'?'Kroger':'Aldi';
-
-  return `
-    <div class="item-row ${item.checkedOff?'item-checked':''} ${isLow?'item-low':''}"
-         data-item="${encodeURIComponent(JSON.stringify({name:item.ingredientName||item.name,store:item.assignedStore}))}">
-      <button class="checkbox ${item.checkedOff?'checkbox-checked':''}" data-name="${item.ingredientName||item.name}">
-        ${item.checkedOff?'✓':''}
-      </button>
+    <div class="item-row ${item.checkedOff?'item-checked':''} ${low?'item-low':''}">
+      <button class="checkbox ${item.checkedOff?'checkbox-checked':''}" data-check="${encodeURIComponent(name)}">${item.checkedOff?'✓':''}</button>
       <div class="item-info">
-        <div class="item-name ${item.checkedOff?'item-name-crossed':''}">${item.ingredientName||item.name||'Item'}</div>
+        <div class="item-name ${item.checkedOff?'item-name-crossed':''}">${name}</div>
         <div class="item-sub">
           ${item.quantity||''}
-          ${isLow?'<span class="badge badge-low" style="margin-left:4px;">LOW</span>':''}
+          ${low?'<span class="badge badge-low" style="margin-left:4px;">LOW</span>':''}
           ${item.quantityConflict?'<span style="font-size:10px;color:var(--warning);margin-left:4px;">verify qty</span>':''}
         </div>
       </div>
       <div class="item-right">
-        ${origPrice?`<span class="price-original">$${origPrice.toFixed(2)}</span>`:''}
+        ${orig?`<span class="price-original">$${orig.toFixed(2)}</span>`:''}
         ${price?`<span class="${hasSale?'price-sale':'price-reg'}">$${price.toFixed(2)}</span>`:''}
         ${hasSale?'<span class="badge badge-sale">Sale</span>':''}
-        <button class="move-pill" data-name="${item.ingredientName||item.name}" data-store="${item.assignedStore}">→ ${otherStore}</button>
+        <button class="move-pill" data-move="${encodeURIComponent(name)}" data-from="${store}">→ ${other}</button>
       </div>
     </div>`;
 }
 
-function bindListEvents(list, items) {
-  // Check off items
-  document.querySelectorAll('.checkbox[data-name]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const name  = btn.dataset.name;
-      const newItems = items.map(i=>{
-        if((i.ingredientName||i.name)===name){
-          return {...i, checkedOff:!i.checkedOff, checkedBy:currentUser?.id, checkedAt:new Date().toISOString()};
-        }
-        return i;
-      });
-      try {
-        await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{items:newItems});
-        // Update sync bar
-        const syncText=document.getElementById('sync-text');
-        if(syncText) syncText.textContent=`${currentUser?.displayName} checked off "${name}"`;
-      } catch(err){ console.error(err); }
+function bindListEvents(list,items) {
+  document.querySelectorAll('[data-check]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const name=decodeURIComponent(btn.dataset.check);
+      const newItems=items.map(i=>(i.ingredientName||i.name)===name?{...i,checkedOff:!i.checkedOff,checkedBy:currentUser?.id,checkedAt:new Date().toISOString()}:i);
+      await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{items:newItems});
+      const st=document.getElementById('sync-text');
+      if(st)st.textContent=`${currentUser?.displayName} checked off "${name}"`;
     });
   });
 
-  // Move store
-  document.querySelectorAll('.move-pill[data-name]').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
+  document.querySelectorAll('[data-move]').forEach(btn=>{
+    btn.addEventListener('click',async e=>{
       e.stopPropagation();
-      const name     = btn.dataset.name;
-      const curStore = btn.dataset.store;
-      const newStore = curStore==='aldi'?'kroger':'aldi';
-      const newItems = items.map(i=>{
-        if((i.ingredientName||i.name)===name) return {...i,assignedStore:newStore,storeOverridden:true};
-        return i;
-      });
+      const name=decodeURIComponent(btn.dataset.move);
+      const from=btn.dataset.from;
+      const to=from==='aldi'?'kroger':'aldi';
+      const newItems=items.map(i=>(i.ingredientName||i.name)===name?{...i,assignedStore:to,storeOverridden:true}:i);
       await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{items:newItems});
     });
   });
 
-  // Add item manually
-  document.getElementById('add-item-submit')?.addEventListener('click', async ()=>{
-    const input=document.getElementById('add-item-input');
-    const name=input.value.trim();
-    if(!name) return;
+  document.getElementById('add-submit')?.addEventListener('click',async()=>{
+    const inp=document.getElementById('add-input');
+    const name=inp.value.trim();
+    if(!name)return;
     const newItem={ingredientName:name,quantity:'',sourceMealIds:[],quantityConflict:false,pantryStatus:'none',assignedStore:'kroger',storeOverridden:false,checkedOff:false,checkedBy:null,checkedAt:null,category:'Other',isManuallyAdded:true,krogerPrice:null,krogerSalePrice:null,aldiPrice:null};
-    const newItems=[...items,newItem];
-    await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{items:newItems});
-    input.value='';
+    await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{items:[...items,newItem]});
+    inp.value='';
   });
+  document.getElementById('add-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('add-submit')?.click();});
 
-  document.getElementById('add-item-input')?.addEventListener('keydown',e=>{
-    if(e.key==='Enter') document.getElementById('add-item-submit')?.click();
-  });
-
-  // Complete list
-  document.getElementById('complete-btn')?.addEventListener('click',()=>{
-    if(list.status==='complete') return;
-    showCompleteConfirmation(list,items);
+  document.getElementById('done-btn')?.addEventListener('click',()=>{
+    if(list.status==='complete')return;
+    showComplete(list,items);
   });
 }
 
-function showCompleteConfirmation(list, items) {
-  const checked   = items.filter(i=>i.checkedOff);
-  const unchecked = items.filter(i=>!i.checkedOff);
-  const savings   = list.estimatedSavings;
-  const overlay   = document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.innerHTML=`
+function showComplete(list,items){
+  const checked=items.filter(i=>i.checkedOff);
+  const unchecked=items.filter(i=>!i.checkedOff);
+  const ov=document.createElement('div');ov.className='modal-overlay';
+  ov.innerHTML=`
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
       <div style="background:var(--success);padding:20px;text-align:center;">
@@ -279,69 +196,50 @@ function showCompleteConfirmation(list, items) {
       </div>
       <div style="padding:16px 20px;">
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;">
-          <span style="color:var(--text-3);">Items checked</span>
-          <span style="font-weight:700;">${checked.length} of ${items.length}</span>
+          <span style="color:var(--text-3);">Items checked</span><span style="font-weight:700;">${checked.length} of ${items.length}</span>
         </div>
-        ${savings?`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;">
-          <span style="color:var(--text-3);">Estimated savings</span>
-          <span style="font-weight:700;color:var(--success);">−$${savings.toFixed(2)}</span>
-        </div>`:''}
-        ${unchecked.length>0?`<div class="note note-warn" style="margin-top:12px;">
-          <span>⚠</span><div><strong>${unchecked.length} item${unchecked.length!==1?'s':''} unchecked</strong> — pantry won't update for: ${unchecked.map(i=>i.ingredientName||i.name).join(', ')}</div>
-        </div>`:''}
+        ${unchecked.length?`<div class="note note-warn" style="margin-top:12px;"><span>⚠</span><div><strong>${unchecked.length} item${unchecked.length!==1?'s':''} unchecked</strong> — pantry won't update for: ${unchecked.map(i=>i.ingredientName||i.name).slice(0,3).join(', ')}${unchecked.length>3?'…':''}</div></div>`:''}
         <div style="display:flex;gap:8px;margin-top:16px;">
-          <button class="btn-primary" id="confirm-complete" style="flex:1.5;background:var(--success);">✓ Confirm & Update Pantry</button>
-          <button class="btn-ghost" style="flex:1;" onclick="this.closest('.modal-overlay').remove()">Go Back</button>
+          <button class="btn-primary" style="flex:1.5;background:var(--success);" id="confirm-done">✓ Confirm & Update Pantry</button>
+          <button class="btn-ghost" style="flex:1;" id="cancel-done">Go Back</button>
         </div>
       </div>
       <div style="height:max(16px,env(safe-area-inset-bottom));"></div>
     </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click',e=>{ if(e.target===overlay) overlay.remove(); });
-  document.getElementById('confirm-complete')?.addEventListener('click', async ()=>{
-    overlay.remove();
-    await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{
-      status:'complete', completedAt:serverTimestamp(), completedBy:currentUser?.id
-    });
-    // Update pantry for checked items
-    const purchasedNames=checked.map(i=>i.ingredientName||i.name).filter(Boolean);
-    if(purchasedNames.length>0) await markPurchased(purchasedNames);
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  document.getElementById('cancel-done')?.addEventListener('click',()=>ov.remove());
+  document.getElementById('confirm-done')?.addEventListener('click',async()=>{
+    ov.remove();
+    await updateDoc(doc(db,COLLECTIONS.SHOPPING_LISTS,_listId),{status:'complete',completedAt:serverTimestamp(),completedBy:currentUser?.id});
+    const names=checked.map(i=>i.ingredientName||i.name).filter(Boolean);
+    if(names.length) await markPurchased(names);
     navigate('/dashboard');
   });
 }
 
-function showSilenceMenu() {
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.innerHTML=`
+function showSilence(){
+  const ov=document.createElement('div');ov.className='modal-overlay';
+  ov.innerHTML=`
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
-      <div style="padding:16px 20px 8px;font-size:16px;font-weight:800;color:var(--text);">Silence Notifications</div>
-      <button class="menu-item" id="silence-trip">🛒 Silence this trip</button>
-      <button class="menu-item" id="silence-1hr">⏱ Silence for 1 hour</button>
-      <button class="menu-item" id="silence-manual">🔕 Silence until I turn it back on</button>
-      <button class="menu-item" style="color:var(--text-3);" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+      <div style="padding:16px 20px 8px;font-size:16px;font-weight:800;">Silence Notifications</div>
+      <button class="menu-item">🛒 Silence this trip</button>
+      <button class="menu-item">⏱ Silence for 1 hour</button>
+      <button class="menu-item">🔕 Silence until I turn it back on</button>
+      <button class="menu-item" style="color:var(--text-3);" id="cancel-silence">Cancel</button>
       <div style="height:max(16px,env(safe-area-inset-bottom));"></div>
     </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click',e=>{ if(e.target===overlay) overlay.remove(); });
-  ['silence-trip','silence-1hr','silence-manual'].forEach(id=>{
-    document.getElementById(id)?.addEventListener('click',()=>{ overlay.remove(); alert('Notifications silenced. (Push notification integration coming soon.)'); });
-  });
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  ov.querySelectorAll('.menu-item').forEach(b=>b.addEventListener('click',()=>ov.remove()));
 }
 
-function buildTabBar() {
-  return `<nav class="tab-bar">
-    <button class="tab-item" data-route="/dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Home</span></button>
-    <button class="tab-item" data-route="/planner"><span class="tab-icon">📅</span><span class="tab-label">Planner</span></button>
-    <button class="tab-item" data-route="/meals"><span class="tab-icon">🍽️</span><span class="tab-label">Meals</span></button>
-    <button class="tab-item active" data-route="/shopping"><span class="tab-icon">🛒</span><span class="tab-label">Shopping</span><div class="tab-dot"></div></button>
-    <button class="tab-item" data-route="/calendar"><span class="tab-icon">📆</span><span class="tab-label">Calendar</span></button>
-  </nav>`;
-}
-
-function bindTabBar() {
-  document.querySelectorAll('.tab-item[data-route]').forEach(btn=>{
-    btn.addEventListener('click',()=>{ if(_unsubscribe) _unsubscribe(); navigate(btn.dataset.route); });
-  });
-}
+function buildTabBar(){return`<nav class="tab-bar">
+  <button class="tab-item" data-route="/dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Home</span></button>
+  <button class="tab-item" data-route="/planner"><span class="tab-icon">📅</span><span class="tab-label">Planner</span></button>
+  <button class="tab-item" data-route="/meals"><span class="tab-icon">🍽️</span><span class="tab-label">Meals</span></button>
+  <button class="tab-item active" data-route="/shopping"><span class="tab-icon">🛒</span><span class="tab-label">Shopping</span><div class="tab-dot"></div></button>
+  <button class="tab-item" data-route="/calendar"><span class="tab-icon">📆</span><span class="tab-label">Calendar</span></button>
+</nav>`;}
+function bindTabBar(){document.querySelectorAll('.tab-item[data-route]').forEach(b=>b.addEventListener('click',()=>{if(_unsub)_unsub();navigate(b.dataset.route);}));}
